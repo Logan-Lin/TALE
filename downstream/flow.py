@@ -8,15 +8,12 @@ from torch import nn
 from torch.nn.utils import weight_norm
 from sklearn.utils import shuffle
 from sklearn.metrics import mean_absolute_error
-import nni
 
 from utils import weight_init, next_batch, cal_regression_metric
 from downstream.next_loc import attention
 
 
-class FlowParam:
-    local_model_path = os.path.join('data', 'cache', 'flow.model')
-    local_result_path = os.path.join('data', 'cache', 'flow_result.model')
+MODEL_CACHE_PATH = os.path.join('cache', 'flow.model')
 
 
 class Chomp1d(nn.Module):
@@ -406,11 +403,10 @@ def train_flow_predictor(pre_model, dataset, batch_size, num_epoch,
 
         pres, labels = _test_epoch(pre_model, eval_set)
         metric = mean_absolute_error(labels, pres)
-        nni.report_intermediate_result(metric)
         if early_stopping_round > 0 and min_metric > metric:
             min_metric = metric
             worse_round = 0
-            torch.save(pre_model.state_dict(), FlowParam.local_model_path)
+            torch.save(pre_model.state_dict(), MODEL_CACHE_PATH)
         else:
             worse_round += 1
 
@@ -419,16 +415,12 @@ def train_flow_predictor(pre_model, dataset, batch_size, num_epoch,
             break
 
     if early_stopping_round > 0:
-        pre_model.load_state_dict(torch.load(FlowParam.local_model_path))
+        pre_model.load_state_dict(torch.load(MODEL_CACHE_PATH))
     pres, labels = _test_epoch(pre_model, test_set)
-
-    # test_poi_indices, _, _, _ = zip(*test_set)
-    # with open(os.path.join('data', 'cache', 'flow_result.pkl'), 'wb') as fp:
-    #     pickle.dump({'pre': pres, 'label': labels, 'poi': np.array(test_poi_indices)}, fp)
 
     score_series = cal_regression_metric(pres, labels)
     print(score_series)
-    nni.report_final_result(score_series.loc['mae'])
+    os.remove(MODEL_CACHE_PATH)
     return score_series
 
 
@@ -521,11 +513,10 @@ def train_neigh_flow_predictor(pre_model, embed_layer, dataset, batch_size, num_
 
         pres, labels = _test_epoch(pre_model, eval_set)
         metric = mean_absolute_error(labels, pres)
-        nni.report_intermediate_result(metric)
         if early_stopping_round > 0 and min_metric > metric:
             min_metric = metric
             worse_round = 0
-            torch.save(pre_model.state_dict(), FlowParam.local_model_path)
+            torch.save(pre_model.state_dict(), MODEL_CACHE_PATH)
         else:
             worse_round += 1
 
@@ -534,16 +525,12 @@ def train_neigh_flow_predictor(pre_model, embed_layer, dataset, batch_size, num_
             break
 
     if early_stopping_round > 0:
-        pre_model.load_state_dict(torch.load(FlowParam.local_model_path))
+        pre_model.load_state_dict(torch.load(MODEL_CACHE_PATH))
     pres, labels = _test_epoch(pre_model, test_set)
-
-    # test_poi_indices, _ = zip(*test_set)
-    # with open(os.path.join('data', 'cache', 'flow_result.pkl'), 'wb') as fp:
-    #     pickle.dump({'pre': pres, 'label': labels, 'poi': np.array(test_poi_indices)}, fp)
 
     score_series = cal_regression_metric(pres, labels)
     print(score_series)
-    nni.report_final_result(score_series.loc['mae'])
+    os.remove(MODEL_CACHE_PATH)
     return score_series
 
 
@@ -570,5 +557,4 @@ def train_ml_flow_predictor(pre_model, dataset, test_set_choice, early_stopping_
 
     score_series = cal_regression_metric(pre, test_label)
     print(score_series)
-    nni.report_final_result(score_series.loc['mae'])
     return score_series

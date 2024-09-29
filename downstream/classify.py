@@ -1,7 +1,6 @@
 import os
 from collections import Counter
 
-import nni
 import numpy as np
 import torch
 from sklearn.metrics import accuracy_score
@@ -11,10 +10,8 @@ from torch import nn
 from utils import weight_init, next_batch, cal_classify_metric
 
 
-class ClassifyParam:
-    local_model_path = os.path.join('data', 'cache',
-                                    'classify_{}_{}.model'.format(nni.get_experiment_id(), nni.get_trial_id()))
-    top_n_list = list(range(1, 11)) + [15, 20]
+MODEL_CACHE_PATH = os.path.join('cache', 'classify.model')
+CLASSIFY_TOP_N_LIST = list(range(1, 11)) + [15, 20]
 
 
 def split_categories(categories, test_set_choice):
@@ -59,9 +56,8 @@ def dot_product_knn_classify(embed_layer, categories, test_set_choice, k, device
         most_common = Counter(candidate_label_row.tolist()).most_common(1)
         pres.append(most_common[0][0])
     pres = np.array(pres)  # (test_set_size)
-    score_series = cal_classify_metric(None, pres, test_labels, ClassifyParam.top_n_list)
+    score_series = cal_classify_metric(None, pres, test_labels, CLASSIFY_TOP_N_LIST)
     print(score_series)
-    nni.report_final_result(score_series.loc['acc@1'])
     return score_series
 
 
@@ -135,11 +131,10 @@ def train_classifier(pre_model, categories, batch_size, num_epoch, lr,
 
         pre_dists, pres, labels = _test_epoch(pre_model, eval_categories)
         metric = accuracy_score(labels, pres)
-        nni.report_intermediate_result(metric)
         if early_stopping_round > 0 and max_metric < metric:
             max_metric = metric
             worse_round = 0
-            torch.save(pre_model.state_dict(), ClassifyParam.local_model_path)
+            torch.save(pre_model.state_dict(), MODEL_CACHE_PATH)
         else:
             worse_round += 1
 
@@ -149,10 +144,9 @@ def train_classifier(pre_model, categories, batch_size, num_epoch, lr,
 
     # Load the model with the best test metric value.
     if early_stopping_round > 0 and max_metric > 0:
-        pre_model.load_state_dict(torch.load(ClassifyParam.local_model_path))
+        pre_model.load_state_dict(torch.load(MODEL_CACHE_PATH))
     pre_dists, pres, labels = _test_epoch(pre_model, test_categories)
-    score_series = cal_classify_metric(pre_dists, pres, labels, ClassifyParam.top_n_list)
+    score_series = cal_classify_metric(pre_dists, pres, labels, CLASSIFY_TOP_N_LIST)
     print(score_series)
-    nni.report_final_result(score_series.loc['acc@1'])
-    os.remove(ClassifyParam.local_model_path)
+    os.remove(MODEL_CACHE_PATH)
     return score_series

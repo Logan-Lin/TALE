@@ -9,15 +9,12 @@ from torch.nn.utils.rnn import pack_padded_sequence
 from torch.nn import functional as F
 from sklearn.utils import shuffle
 from sklearn.metrics import accuracy_score
-import nni
 
 from utils import weight_init, next_batch, cal_classify_metric
 
 
-class NextLocParam:
-    local_model_path = os.path.join('data', 'cache', 'next_loc_{}_{}.model'.format(nni.get_experiment_id(), nni.get_trial_id()))
-    local_result_path = os.path.join('data', 'cache', 'next_loc_result.h5')
-    top_n_list = [1, 2, 3, 4, 5, 10, 20]
+MODEL_CACHE_PATH = os.path.join('cache', 'next_loc.model')
+CLASSIFY_TOP_N_LIST = list(range(1, 6)) + [10, 20]
 
 
 def attention(query, key, value, mask=None, dropout=None):
@@ -212,11 +209,10 @@ def train_next_loc(pre_model, dataset, batch_size, num_epoch,
 
         pre_distributions, pres, labels = _test_epoch(pre_model, eval_set)
         metric = accuracy_score(labels, pres)
-        nni.report_intermediate_result(metric)
         if early_stopping_round > 0 and max_metric < metric:
             max_metric = metric
             worse_round = 0
-            torch.save(pre_model.state_dict(), NextLocParam.local_model_path)
+            torch.save(pre_model.state_dict(), MODEL_CACHE_PATH)
         else:
             worse_round += 1
 
@@ -226,10 +222,9 @@ def train_next_loc(pre_model, dataset, batch_size, num_epoch,
 
     # Load the model with the best test metric value.
     if early_stopping_round > 0:
-        pre_model.load_state_dict(torch.load(NextLocParam.local_model_path))
+        pre_model.load_state_dict(torch.load(MODEL_CACHE_PATH))
     pre_distributions, pres, labels = _test_epoch(pre_model, test_set)
-    score_series = cal_classify_metric(pre_distributions, pres, labels, NextLocParam.top_n_list)
+    score_series = cal_classify_metric(pre_distributions, pres, labels, CLASSIFY_TOP_N_LIST)
     print(score_series)
-    nni.report_final_result(score_series.loc['acc@1'])
-    os.remove(NextLocParam.local_model_path)
+    os.remove(MODEL_CACHE_PATH)
     return score_series
