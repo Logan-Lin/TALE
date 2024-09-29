@@ -4,7 +4,7 @@ This repository provides the implementation code for the Time-Aware Location Emb
 
 ## Model overview
 
-![model structure](figure/tale_model.png)
+![model structure](assets/tale_model.png)
 
 TALE is a location embedding model which maps each location (typically a POI) to a low dimensional embedding space. It utilizes trajectory data (or check-in data) to extract location functionalities from contextual and temporal information. In addition to the contextual information extracted by conventional word2vec models, TALE introduces a temporal tree structure that segments time into intervals and utilizes hierarchical softmax to further incorporate temporal information.
 
